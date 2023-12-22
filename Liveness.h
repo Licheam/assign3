@@ -81,15 +81,13 @@ public:
 
     bool runOnFunction(Function &F) override
     {
-        // F.dump();
-        errs() << "Function: " << F.getName() << "\n";
+        F.dump();
         LivenessVisitor visitor;
         DataflowResult<LivenessInfo>::Type result;
         LivenessInfo initval;
 
         compBackwardDataflow(&F, &visitor, &result, initval);
         printDataflowResult<LivenessInfo>(errs(), result);
-        errs() << "------------------------------\n";
         return false;
     }
 };
