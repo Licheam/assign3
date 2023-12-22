@@ -56,7 +56,6 @@ char EnableFunctionOptPass::ID = 0;
 struct FuncPtrPass : public ModulePass
 {
     static char ID; // Pass identification, replacement for typeid
-    std::map<int, std::set<std::string>> line2func;
 
     FuncPtrPass() : ModulePass(ID) {}
 
@@ -64,10 +63,9 @@ struct FuncPtrPass : public ModulePass
     {
         PointsToVisitor visitor;
         DataflowResult<PointsToInfo>::Type result;
-        PointsToInfo initval;
         for (Function &F : M)
         {
-            compForwardDataflow(&F, &visitor, &result, initval);
+            compForwardDataflow(&F, &visitor, &result, PointsToInfo());
         }
 
         // for (Function &F : M)
@@ -99,30 +97,30 @@ struct FuncPtrPass : public ModulePass
         // }
 
         
-        for (Function &F : M)
-        {
-            for (BasicBlock &BB : F)
-            {
-                PointsToInfo incoming = result[&BB].first;
-                for (Instruction &I : BB)
-                {
-                    if (const CallInst *C = dyn_cast<CallInst>(&I))
-                    {
-                        if (I.getDebugLoc().getLine())
-                        {
-                            // errs() << "Location: " << I.getDebugLoc().getLine() << "\n";
-                            // errs() << "CallInst: " << I << "\n";
-                            std::set<Value *> S;
-                            S = incoming.pointsToSets[C->getCalledOperand()];
-                            for (Value *f : S)
-                                line2func[I.getDebugLoc().getLine()].insert(f->getName());
-                        }
-                    }
-                    visitor.compDFVal(&I, &incoming);
-                }
-            }
-        }
-        for (auto iter = line2func.begin(); iter != line2func.end(); ++iter)
+        // for (Function &F : M)
+        // {
+        //     for (BasicBlock &BB : F)
+        //     {
+        //         PointsToInfo incoming = result[&BB].first;
+        //         for (Instruction &I : BB)
+        //         {
+        //             if (const CallInst *C = dyn_cast<CallInst>(&I))
+        //             {
+        //                 if (I.getDebugLoc().getLine())
+        //                 {
+        //                     // errs() << "Location: " << I.getDebugLoc().getLine() << "\n";
+        //                     // errs() << "CallInst: " << I << "\n";
+        //                     std::set<Value *> S;
+        //                     S = incoming.pointsToSets[C->getCalledOperand()];
+        //                     for (Value *f : S)
+        //                         line2func[I.getDebugLoc().getLine()].insert(f->getName());
+        //                 }
+        //             }
+        //             visitor.compDFVal(&I, &incoming);
+        //         }
+        //     }
+        // }
+        for (auto iter = visitor.line2func.begin(); iter != visitor.line2func.end(); ++iter)
         {
             outs() << iter->first << " : ";
             for (auto iter2 = iter->second.begin(); iter2 != iter->second.end(); ++iter2)

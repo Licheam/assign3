@@ -56,6 +56,8 @@ inline raw_ostream &operator<<(raw_ostream &out, const PointsToInfo &info)
 class PointsToVisitor : public DataflowVisitor<struct PointsToInfo>
 {
 public:
+    std::map<int, std::set<std::string>> line2func;
+
     PointsToVisitor() {}
     void merge(PointsToInfo *dest, const PointsToInfo &src) override
     {
@@ -118,16 +120,41 @@ public:
         }
         else if (CallInst *callInst = dyn_cast<CallInst>(inst))
         {
-            errs() << "CallInst: " << *callInst << "\n";
-            Value *operand = callInst->getCalledOperand();
-            errs() << "CalledOperand: " << *callInst->getCalledOperand() << "\n";
-            std::set<Value *> &pointsToSet = dfval->pointsToSets[callInst->getCalledOperand()];
-            for (Value *v : pointsToSet)
+            Value *calledValue = callInst->getCalledOperand();
+            std::set<Function *> calledFunctions;
+            if (isa<Function>(calledValue))
             {
-                if (Function *f = dyn_cast<Function>(v))
+                calledFunctions.insert(dyn_cast<Function>(calledValue));
+            }
+            else
+            {
+                for (Value *v : dfval->pointsToSets[calledValue])
                 {
-                    errs() << "Function: " << f->getName() << "\n";
+                    if (Function *f = dyn_cast<Function>(v))
+                    {
+                        calledFunctions.insert(f);
+                    }
                 }
+            }
+            if (inst->getDebugLoc().getLine())
+            {
+                for (Value *f : calledFunctions)
+                    line2func[inst->getDebugLoc().getLine()].insert(f->getName());
+            }
+
+            for (Function *f : calledFunctions)
+            {
+                DataflowResult<PointsToInfo>::Type fResult;
+                for (int i = 0; i < f->getFunctionType()->getNumParams(); ++i)
+                {
+                    Value *arg = callInst->getArgOperand(i);
+                    if (arg->getType()->isPointerTy())
+                    {
+                        Value *callArg = f->getArg(i);
+                        fResult[&f->getEntryBlock()].first.pointsToSets[callArg] = dfval->pointsToSets[arg];
+                    }
+                }
+                compForwardDataflow(f, this, &fResult, PointsToInfo());
             }
         }
         else

@@ -94,11 +94,12 @@ void compForwardDataflow(Function *fn,
 {
     std::set<BasicBlock *> worklist;
 
-    // Initialize the worklist with all exit blocks
+    // Initialize the worklist with all entry blocks
     for (Function::iterator bi = fn->begin(); bi != fn->end(); ++bi)
     {
         BasicBlock *bb = &*bi;
-        result->insert(std::make_pair(bb, std::make_pair(initval, initval)));
+        if (result->find(bb) == result->end())
+            result->insert(std::make_pair(bb, std::make_pair(initval, initval)));
         worklist.insert(bb);
     }
 
