@@ -24,8 +24,21 @@ using namespace llvm;
 struct PointsToInfo
 {
     std::map<const Value *, std::set<Value *>> pointsToSets; /// Points-to sets
+    std::map<const Value *, Value *> pointsToAlias;          /// Points-to alias
     PointsToInfo() : pointsToSets() {}
     PointsToInfo(const PointsToInfo &info) : pointsToSets(info.pointsToSets) {}
+
+    Value *getAlias(Value *v)
+    {
+        if (pointsToAlias.find(v) == pointsToAlias.end())
+            return v;
+        return pointsToAlias[v];
+    }
+
+    std::set<Value *> &getPointsToSet(Value *v)
+    {
+        return pointsToSets[getAlias(v)];
+    }
 
     bool operator==(const PointsToInfo &info) const
     {
@@ -80,6 +93,7 @@ public:
     {
         if (isa<DbgInfoIntrinsic>(inst))
             return;
+
         if (inst->getDebugLoc())
         {
             errs() << "Location: " << inst->getDebugLoc().getLine() << "\n";
@@ -100,12 +114,12 @@ public:
 
             if (Function *f = dyn_cast<Function>(value))
             {
-                dfval->pointsToSets[pointer].insert(value);
+                dfval->getPointsToSet(pointer).insert(value);
             }
             else
             {
-                dfval->pointsToSets[pointer].insert(
-                    dfval->pointsToSets[value].begin(), dfval->pointsToSets[value].end());
+                dfval->getPointsToSet(pointer).insert(
+                    dfval->getPointsToSet(value).begin(), dfval->getPointsToSet(value).end());
             }
         }
         else if (LoadInst *loadInst = dyn_cast<LoadInst>(inst))
@@ -116,10 +130,21 @@ public:
             errs() << "LoadInst: " << *loadInst << "\n";
             errs() << "Pointer: " << *pointer << "\n";
 
-            dfval->pointsToSets[loadInst] = dfval->pointsToSets[pointer];
+            dfval->getPointsToSet(loadInst) = dfval->getPointsToSet(pointer);
+        }
+        else if (GetElementPtrInst *getElementPtrInst = dyn_cast<GetElementPtrInst>(inst))
+        {
+            errs() << "GetElementPtrInst: " << *getElementPtrInst << "\n";
+            Value *pointer = getElementPtrInst->getPointerOperand();
+            errs() << "Pointer: " << *pointer << "\n";
+            dfval->pointsToAlias[getElementPtrInst] = pointer;
+        }
+        else if (MemSetInst *memSetInst = dyn_cast<MemSetInst>(inst))
+        {
         }
         else if (CallInst *callInst = dyn_cast<CallInst>(inst))
         {
+            errs() << "CallInst: " << *callInst << "\n";
             Value *calledValue = callInst->getCalledOperand();
             std::set<Function *> calledFunctions;
             if (isa<Function>(calledValue))
@@ -128,7 +153,7 @@ public:
             }
             else
             {
-                for (Value *v : dfval->pointsToSets[calledValue])
+                for (Value *v : dfval->getPointsToSet(calledValue))
                 {
                     if (Function *f = dyn_cast<Function>(v))
                     {
@@ -151,7 +176,7 @@ public:
                     if (arg->getType()->isPointerTy())
                     {
                         Value *callArg = f->getArg(i);
-                        fResult[&f->getEntryBlock()].first.pointsToSets[callArg] = dfval->pointsToSets[arg];
+                        fResult[&f->getEntryBlock()].first.pointsToSets[callArg] = dfval->getPointsToSet(arg);
                     }
                 }
                 compForwardDataflow(f, this, &fResult, PointsToInfo());
