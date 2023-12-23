@@ -77,6 +77,8 @@ endforeach()
 set(test_data
 "test000\;^38 : minus\n$"
 "test001\;^31 : swap1\n32 : swap2\n34 : minus\n$"
+"test002\;^37 : swap\n39 : minus\n40 : minus\n$"
+"test004\;^27 : minus\n38 : foo\n81 : clever\n82 : minus\n83 : ((plus, minus)|(minus, plus))\n85 : minus\n$"
 )
 
 foreach(test_info ${test_data})

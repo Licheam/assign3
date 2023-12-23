@@ -311,7 +311,7 @@ public:
                         if (Value *retValue = retInst->getReturnValue())
                         {
                             errs() << "Return Value: " << *retValue << "\n";
-                            fResult[&bb].second.load(retValue, callInst);
+                            fResult[&bb].second.assign(retValue, callInst);
                         }
                         merge(&bbReturn, fResult[&bb].second);
                     }
