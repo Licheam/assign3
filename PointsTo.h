@@ -144,12 +144,12 @@ inline raw_ostream &operator<<(raw_ostream &out, const PointsToInfo &info)
     {
         const Value *val = ii->first;
         const std::set<Value *> &pointsToSet = ii->second;
-        out << val->getName() << " -> {";
+        out << *val << " -> {";
         for (std::set<Value *>::const_iterator si = pointsToSet.begin(), se = pointsToSet.end();
              si != se; ++si)
         {
             const Value *v = *si;
-            out << v->getName() << ", ";
+            out << *v << ", ";
         }
         out << "}\n";
     }
@@ -160,12 +160,12 @@ inline raw_ostream &operator<<(raw_ostream &out, const PointsToInfo &info)
     {
         const Value *val = ii->first;
         const std::set<Value *> &pointerInclude = ii->second;
-        out << val->getName() << " -> {";
+        out << *val << " -> {";
         for (std::set<Value *>::const_iterator si = pointerInclude.begin(), se = pointerInclude.end();
              si != se; ++si)
         {
             const Value *v = *si;
-            out << v->getName() << ", ";
+            out << *v << ", ";
         }
         out << "}\n";
     }
@@ -281,7 +281,7 @@ public:
 
             PointsToInfo bbReturn;
             bool hasReturn = false;
-            // errs() << "dfval: " << *dfval << "\n";
+            errs() << "dfval: " << *dfval << "\n";
             for (Function *f : calledFunctions)
             {
                 if (f->hasExactDefinition() == false)
@@ -295,6 +295,8 @@ public:
                     if (arg->getType()->isPointerTy())
                     {
                         Value *callArg = f->getArg(i);
+                        errs() << "CallArg: " << *callArg << "\n";
+                        errs() << "Arg: " << *arg << "\n";
                         newdfval.store(callArg, arg);
                     }
                 }
@@ -304,14 +306,11 @@ public:
                 compForwardDataflow(f, this, &fResult, PointsToInfo());
                 for (BasicBlock &bb : *f)
                 {
-                    if (isa<ReturnInst>(*bb.getTerminator()) ||
-                        (bb.getSingleSuccessor() == nullptr && bb.getUniqueSuccessor() == nullptr))
+                    if (ReturnInst *retInst = dyn_cast<ReturnInst>(bb.getTerminator()))
                     {
-                        // errs() << "BB terminator: " << *bb.getTerminator() << "\n";
-                        if (ReturnInst *retInst = dyn_cast<ReturnInst>(bb.getTerminator()))
+                        if (Value *retValue = retInst->getReturnValue())
                         {
-                            Value *retValue = retInst->getReturnValue();
-                            fResult[&bb].second.assign(retValue, callInst);
+                            fResult[&bb].second.store(callInst, retValue);
                         }
                         merge(&bbReturn, fResult[&bb].second);
                     }
