@@ -227,6 +227,10 @@ public:
         else if (MemSetInst *memSetInst = dyn_cast<MemSetInst>(inst))
         {
         }
+        else if (MemCpyInst *memCpyInst = dyn_cast<MemCpyInst>(inst))
+        {
+            errs() << "MemCpyInst: " << *memCpyInst << "\n";
+        }
         else if (CallInst *callInst = dyn_cast<CallInst>(inst))
         {
             errs() << "CallInst: " << *callInst << "\n";
