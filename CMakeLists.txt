@@ -52,7 +52,7 @@ set(test_data
 "test25\;^21 : plus\n37 : make_alias\n38 : foo\n$"
 "test26\;^31 : malloc\n39 : plus\n40 : make_alias\n45 : minus\n$"
 "test27\;^22 : plus\n27 : foo\n44 : clever\n$"
-"test28\;^22 : plus\n29 : foo\n34 : malloc\n36 : malloc\n38 : malloc\n47 : clever\n$"
+"test28\;^22 : ((plus, minus)|(minus, plus))\n29 : foo\n34 : malloc\n36 : malloc\n38 : malloc\n47 : clever\n$"
 "test29\;^21 : ((plus, minus)|(minus, plus))\n26 : clever\n27 : ((plus, minus)|(minus, plus))\n41 : malloc\n46 : foo\n51 : foo\n$"
 "test30\;^41 : ((foo, clever)|(clever, foo))\n42 : ((plus, minus)|(minus, plus))\n$"
 "test31\;^39 : foo\n40 : plus\n44 : clever\n45 : ((plus, minus)|(minus, plus))\n47 : ((plus, minus)|(minus, plus))\n$"

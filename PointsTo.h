@@ -21,6 +21,16 @@
 #include <set>
 using namespace llvm;
 
+void dump(std::set<Value *> s)
+{
+    errs() << "{";
+    for (Value *v : s)
+    {
+        errs() << *v << ", ";
+    }
+    errs() << "}\n";
+}
+
 struct PointsToInfo
 {
     std::map<const Value *, std::set<Value *>> pointsToSets;   /// Points-to sets
@@ -42,9 +52,7 @@ struct PointsToInfo
             everWorkList.insert(p);
 
             if (pointerInclude.find(p) == pointerInclude.end())
-            {
                 result.insert(p);
-            }
             else
             {
                 for (Value *v : pointerInclude[p])
@@ -68,7 +76,14 @@ struct PointsToInfo
             }
             else
             {
-                result.insert(pointsToSets[p].begin(), pointsToSets[p].end());
+                if (pointsToSets.find(p) == pointsToSets.end())
+                {
+                    result.insert(p);
+                }
+                else
+                {
+                    result.insert(pointsToSets[p].begin(), pointsToSets[p].end());
+                }
             }
         }
         return result;
@@ -81,8 +96,14 @@ struct PointsToInfo
 
     void store(Value *pointer, Value *value) // *pointer = value
     {
+        errs() << "Store: " << *pointer << " = " << *value << "\n";
         std::set<Value *> pointers = getInclude(pointer);
         std::set<Value *> values = getPointsTo(value);
+        errs() << "Pointers: ";
+        dump(pointers);
+        errs() << "Values: ";
+        dump(values);
+
         if (pointers.size() == 1)
         {
             pointsToSets[*pointers.begin()] = values;
