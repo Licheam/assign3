@@ -62,7 +62,14 @@ struct PointsToInfo
         std::set<Value *> result;
         for (Value *p : ps)
         {
-            result.insert(pointsToSets[p].begin(), pointsToSets[p].end());
+            if (Function *f = dyn_cast<Function>(p))
+            {
+                result.insert(f);
+            }
+            else
+            {
+                result.insert(pointsToSets[p].begin(), pointsToSets[p].end());
+            }
         }
         return result;
     }
@@ -72,10 +79,10 @@ struct PointsToInfo
         return getPointsTo(getInclude(p));
     }
 
-    void store(Value *pointer, Value *value) // pointer = value
+    void store(Value *pointer, Value *value) // *pointer = value
     {
         std::set<Value *> pointers = getInclude(pointer);
-        std::set<Value *> values = getInclude(value);
+        std::set<Value *> values = getPointsTo(value);
         if (pointers.size() == 1)
         {
             pointsToSets[*pointers.begin()] = values;
@@ -226,7 +233,8 @@ public:
                     if (arg->getType()->isPointerTy())
                     {
                         Value *callArg = f->getArg(i);
-                        fResult[&f->getEntryBlock()].first.pointsToSets[callArg] = dfval->getInclude(arg);
+                        dfval->store(callArg, arg);
+                        fResult[&f->getEntryBlock()].first = *dfval;
                     }
                 }
                 compForwardDataflow(f, this, &fResult, PointsToInfo());
