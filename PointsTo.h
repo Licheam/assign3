@@ -297,7 +297,7 @@ public:
                         Value *callArg = f->getArg(i);
                         errs() << "CallArg: " << *callArg << "\n";
                         errs() << "Arg: " << *arg << "\n";
-                        newdfval.load(arg, callArg);
+                        newdfval.assign(arg, callArg);
                     }
                 }
                 fResult[&f->getEntryBlock()].first = newdfval;

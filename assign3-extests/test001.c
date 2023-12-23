@@ -17,11 +17,11 @@ void swap1(int (**a_f)(int, int), int (**b_f)(int, int))
     *b_f = tmp;
 }
 
-void swap2(int (*a_f)(int, int), int (*b_f)(int, int))
+void swap2(int (*a_f2)(int, int), int (*b_f2)(int, int))
 {
-    int (*tmp)(int, int) = a_f;
-    a_f = b_f;
-    b_f = tmp;
+    int (*tmp2)(int, int) = a_f2;
+    a_f2 = b_f2;
+    b_f2 = tmp2;
 }
 
 int clever() {
@@ -29,6 +29,7 @@ int clever() {
     int (*s_fptr)(int, int) = minus;
 
     swap1(&a_fptr, &s_fptr);
+    swap2(a_fptr, s_fptr);
 
     unsigned result = a_fptr(1, 2);
 
@@ -36,4 +37,5 @@ int clever() {
 }
 
 // 31 : swap1
-// 33 : minus
+// 32 : swap2
+// 34 : minus
