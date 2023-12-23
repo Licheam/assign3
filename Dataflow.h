@@ -103,7 +103,7 @@ void compForwardDataflow(Function *fn,
         worklist.insert(bb);
     }
 
-    errs() << "worklist size: " << worklist.size() << "\n";
+    // errs() << "worklist size: " << worklist.size() << "\n";
 
     // Iteratively compute the dataflow result
     while (!worklist.empty())
@@ -113,14 +113,14 @@ void compForwardDataflow(Function *fn,
 
         // Merge all outgoing value
         T bbentryval = (*result)[bb].first;
-        errs() << "bbentryval: " << bbentryval << "\n";
+        // errs() << "bbentryval: " << bbentryval << "\n";
         for (auto pi = pred_begin(bb), pe = pred_end(bb); pi != pe; pi++)
         {
             BasicBlock *pred = *pi;
             visitor->merge(&bbentryval, (*result)[pred].second);
         }
 
-        errs() << "bbentryval: " << bbentryval << "\n";
+        // errs() << "bbentryval: " << bbentryval << "\n";
 
         (*result)[bb].first = bbentryval;
         visitor->compDFVal(bb, &bbentryval, true);

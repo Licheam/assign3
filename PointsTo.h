@@ -180,9 +180,9 @@ public:
     PointsToVisitor() {}
     void merge(PointsToInfo *dest, const PointsToInfo &src) override
     {
-        errs() << "Merging PointsToInfo\n";
-        errs() << "Dest: " << *dest << "\n";
-        errs() << "Src: " << src << "\n";
+        // errs() << "Merging PointsToInfo\n";
+        // errs() << "Dest: " << *dest << "\n";
+        // errs() << "Src: " << src << "\n";
         for (std::map<const Value *, std::set<Value *>>::const_iterator ii = src.pointsToSets.begin(),
                                                                         ie = src.pointsToSets.end();
              ii != ie; ++ii)
@@ -202,7 +202,7 @@ public:
             std::set<Value *> &destPointerInclude = dest->pointerInclude[val];
             destPointerInclude.insert(srcPointerInclude.begin(), srcPointerInclude.end());
         }
-        errs() << "Result: " << *dest << "\n";
+        // errs() << "Result: " << *dest << "\n";
     }
 
     void compDFVal(Instruction *inst, PointsToInfo *dfval) override
@@ -281,7 +281,7 @@ public:
 
             PointsToInfo bbReturn;
             bool hasReturn = false;
-            errs() << "dfval: " << *dfval << "\n";
+            // errs() << "dfval: " << *dfval << "\n";
             for (Function *f : calledFunctions)
             {
                 if (f->hasExactDefinition() == false)
@@ -300,21 +300,26 @@ public:
                 }
                 fResult[&f->getEntryBlock()].first = newdfval;
                 errs() << "Calling Function: " << f->getName() << "\n";
-                errs() << "with incoming: " << newdfval << "\n";
+                // errs() << "with incoming: " << newdfval << "\n";
                 compForwardDataflow(f, this, &fResult, PointsToInfo());
                 for (BasicBlock &bb : *f)
                 {
                     if (isa<ReturnInst>(*bb.getTerminator()) ||
                         (bb.getSingleSuccessor() == nullptr && bb.getUniqueSuccessor() == nullptr))
                     {
-                        errs() << "BB terminator: " << *bb.getTerminator() << "\n";
+                        // errs() << "BB terminator: " << *bb.getTerminator() << "\n";
+                        if (ReturnInst *retInst = dyn_cast<ReturnInst>(bb.getTerminator()))
+                        {
+                            Value *retValue = retInst->getReturnValue();
+                            fResult[&bb].second.assign(retValue, callInst);
+                        }
                         merge(&bbReturn, fResult[&bb].second);
                     }
                 }
             }
             if (hasReturn)
             {
-                errs() << "bbReturn: " << bbReturn << "\n";
+                // errs() << "bbReturn: " << bbReturn << "\n";
                 *dfval = bbReturn;
             }
         }
