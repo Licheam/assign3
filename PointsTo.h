@@ -23,26 +23,87 @@ using namespace llvm;
 
 struct PointsToInfo
 {
-    std::map<const Value *, std::set<Value *>> pointsToSets; /// Points-to sets
-    std::map<const Value *, Value *> pointsToAlias;          /// Points-to alias
+    std::map<const Value *, std::set<Value *>> pointsToSets;   /// Points-to sets
+    std::map<const Value *, std::set<Value *>> pointerInclude; /// Pointer include (exclude itself)
     PointsToInfo() : pointsToSets() {}
     PointsToInfo(const PointsToInfo &info) : pointsToSets(info.pointsToSets) {}
 
-    Value *getAlias(Value *v)
+    std::set<Value *> getInclude(Value *p)
     {
-        if (pointsToAlias.find(v) == pointsToAlias.end())
-            return v;
-        return pointsToAlias[v];
+        std::set<Value *> result;
+        std::set<Value *> everWorkList;
+        std::set<Value *> workList = {p};
+        while (!workList.empty())
+        {
+            Value *p = *workList.begin();
+            workList.erase(workList.begin());
+            if (everWorkList.find(p) != everWorkList.end())
+                continue;
+            everWorkList.insert(p);
+
+            if (pointerInclude.find(p) == pointerInclude.end())
+            {
+                result.insert(p);
+            }
+            else
+            {
+                for (Value *v : pointerInclude[p])
+                {
+                    if (everWorkList.find(v) == everWorkList.end())
+                        workList.insert(v);
+                }
+            }
+        }
+        return result;
     }
 
-    std::set<Value *> &getPointsToSet(Value *v)
+    std::set<Value *> getPointsTo(std::set<Value *> ps)
     {
-        return pointsToSets[getAlias(v)];
+        std::set<Value *> result;
+        for (Value *p : ps)
+        {
+            result.insert(pointsToSets[p].begin(), pointsToSets[p].end());
+        }
+        return result;
+    }
+
+    std::set<Value *> getPointsTo(Value *p)
+    {
+        return getPointsTo(getInclude(p));
+    }
+
+    void store(Value *pointer, Value *value) // pointer = value
+    {
+        std::set<Value *> pointers = getInclude(pointer);
+        std::set<Value *> values = getInclude(value);
+        if (pointers.size() == 1)
+        {
+            pointsToSets[*pointers.begin()] = values;
+        }
+        else
+        {
+            for (Value *p : pointers)
+            {
+                pointsToSets[p].insert(values.begin(), values.end());
+            }
+        }
+    }
+
+    void load(Value *pointer, Value *value) // value = *pointer
+    {
+        std::set<Value *> pointees = getPointsTo(pointer);
+        pointerInclude[value] = pointees;
+    }
+
+    void assign(Value *pointee, Value *value) // value = pointee
+    {
+        std::set<Value *> pointees = getInclude(pointee);
+        pointerInclude[value] = pointees;
     }
 
     bool operator==(const PointsToInfo &info) const
     {
-        return pointsToSets == info.pointsToSets;
+        return pointsToSets == info.pointsToSets && pointerInclude == info.pointerInclude;
     }
 };
 
@@ -102,42 +163,38 @@ public:
         {
             errs() << "Location: None\n";
         }
-        if (StoreInst *storeInst = dyn_cast<StoreInst>(inst))
+        if (AllocaInst *allocaInst = dyn_cast<AllocaInst>(inst))
         {
+            errs() << "AllocaInst: " << *allocaInst << "\n";
+        }
+        else if (StoreInst *storeInst = dyn_cast<StoreInst>(inst))
+        {
+            errs() << "StoreInst: " << *storeInst << "\n";
             Value *value = storeInst->getValueOperand();
             Value *pointer = storeInst->getPointerOperand();
             if (isa<ConstantData>(value))
                 return;
-            errs() << "StoreInst: " << *storeInst << "\n";
             errs() << "Value: " << *value << "\n";
             errs() << "Pointer: " << *pointer << "\n";
 
-            if (Function *f = dyn_cast<Function>(value))
-            {
-                dfval->getPointsToSet(pointer).insert(value);
-            }
-            else
-            {
-                dfval->getPointsToSet(pointer).insert(
-                    dfval->getPointsToSet(value).begin(), dfval->getPointsToSet(value).end());
-            }
+            dfval->store(pointer, value);
         }
         else if (LoadInst *loadInst = dyn_cast<LoadInst>(inst))
         {
+            errs() << "LoadInst: " << *loadInst << "\n";
             Value *pointer = loadInst->getPointerOperand();
             if (!pointer->getType()->getContainedType(0)->isPointerTy())
                 return;
-            errs() << "LoadInst: " << *loadInst << "\n";
             errs() << "Pointer: " << *pointer << "\n";
 
-            dfval->getPointsToSet(loadInst) = dfval->getPointsToSet(pointer);
+            dfval->load(pointer, loadInst);
         }
         else if (GetElementPtrInst *getElementPtrInst = dyn_cast<GetElementPtrInst>(inst))
         {
             errs() << "GetElementPtrInst: " << *getElementPtrInst << "\n";
             Value *pointer = getElementPtrInst->getPointerOperand();
             errs() << "Pointer: " << *pointer << "\n";
-            dfval->pointsToAlias[getElementPtrInst] = pointer;
+            dfval->assign(pointer, getElementPtrInst);
         }
         else if (MemSetInst *memSetInst = dyn_cast<MemSetInst>(inst))
         {
@@ -147,18 +204,11 @@ public:
             errs() << "CallInst: " << *callInst << "\n";
             Value *calledValue = callInst->getCalledOperand();
             std::set<Function *> calledFunctions;
-            if (isa<Function>(calledValue))
+            for (Value *v : dfval->getInclude(calledValue))
             {
-                calledFunctions.insert(dyn_cast<Function>(calledValue));
-            }
-            else
-            {
-                for (Value *v : dfval->getPointsToSet(calledValue))
+                if (Function *f = dyn_cast<Function>(v))
                 {
-                    if (Function *f = dyn_cast<Function>(v))
-                    {
-                        calledFunctions.insert(f);
-                    }
+                    calledFunctions.insert(f);
                 }
             }
             if (inst->getDebugLoc().getLine())
@@ -176,7 +226,7 @@ public:
                     if (arg->getType()->isPointerTy())
                     {
                         Value *callArg = f->getArg(i);
-                        fResult[&f->getEntryBlock()].first.pointsToSets[callArg] = dfval->getPointsToSet(arg);
+                        fResult[&f->getEntryBlock()].first.pointsToSets[callArg] = dfval->getInclude(arg);
                     }
                 }
                 compForwardDataflow(f, this, &fResult, PointsToInfo());
