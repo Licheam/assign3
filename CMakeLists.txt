@@ -73,3 +73,21 @@ foreach(test_info ${test_data})
     LABELS "official"
   )
 endforeach()
+
+set(test_data
+"test000\;^38 : minus\n$"
+"test001\;^31 : swap1\n33 : minus\n$"
+)
+
+foreach(test_info ${test_data})
+  list(GET test_info 0 test_name)
+  list(GET test_info 1 test_val)
+  add_test(
+    NAME ${test_name}
+    COMMAND bash -c "${LLVM_TOOLS_BINARY_DIR}/clang -O0 -g3 -emit-llvm ${CMAKE_CURRENT_SOURCE_DIR}/assign3-extests/${test_name}.c -c -o ${CMAKE_CURRENT_SOURCE_DIR}/assign3-extests/${test_name}.bc && $<TARGET_FILE:assignment3> ${CMAKE_CURRENT_SOURCE_DIR}/assign3-extests/${test_name}.bc 2>/dev/null"
+  )
+  set_tests_properties(${test_name} PROPERTIES
+    PASS_REGULAR_EXPRESSION ${test_val}
+    LABELS "extra"
+  )
+endforeach()
