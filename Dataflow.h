@@ -103,6 +103,8 @@ void compForwardDataflow(Function *fn,
         worklist.insert(bb);
     }
 
+    errs() << "worklist size: " << worklist.size() << "\n";
+
     // Iteratively compute the dataflow result
     while (!worklist.empty())
     {
@@ -110,20 +112,23 @@ void compForwardDataflow(Function *fn,
         worklist.erase(worklist.begin());
 
         // Merge all outgoing value
-        T bbexitval = (*result)[bb].first;
+        T bbentryval = (*result)[bb].first;
+        errs() << "bbentryval: " << bbentryval << "\n";
         for (auto pi = pred_begin(bb), pe = pred_end(bb); pi != pe; pi++)
         {
             BasicBlock *pred = *pi;
-            visitor->merge(&bbexitval, (*result)[pred].second);
+            visitor->merge(&bbentryval, (*result)[pred].second);
         }
 
-        (*result)[bb].first = bbexitval;
-        visitor->compDFVal(bb, &bbexitval, true);
+        errs() << "bbentryval: " << bbentryval << "\n";
+
+        (*result)[bb].first = bbentryval;
+        visitor->compDFVal(bb, &bbentryval, true);
 
         // If incoming value changed, propagate it along the CFG
-        if (bbexitval == (*result)[bb].second)
+        if (bbentryval == (*result)[bb].second)
             continue;
-        (*result)[bb].second = bbexitval;
+        (*result)[bb].second = bbentryval;
 
         for (auto si = succ_begin(bb), se = succ_begin(bb); si != se; si++)
         {

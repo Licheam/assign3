@@ -35,8 +35,8 @@ struct PointsToInfo
 {
     std::map<const Value *, std::set<Value *>> pointsToSets;   /// Points-to sets
     std::map<const Value *, std::set<Value *>> pointerInclude; /// Pointer include (exclude itself)
-    PointsToInfo() : pointsToSets() {}
-    PointsToInfo(const PointsToInfo &info) : pointsToSets(info.pointsToSets) {}
+    PointsToInfo() : pointsToSets(), pointerInclude() {}
+    PointsToInfo(const PointsToInfo &info) : pointsToSets(info.pointsToSets), pointerInclude(info.pointerInclude) {}
 
     std::set<Value *> getInclude(Value *p)
     {
@@ -96,13 +96,13 @@ struct PointsToInfo
 
     void store(Value *pointer, Value *value) // *pointer = value
     {
-        errs() << "Store: " << *pointer << " = " << *value << "\n";
+        // errs() << "Store: " << *pointer << " = " << *value << "\n";
         std::set<Value *> pointers = getInclude(pointer);
         std::set<Value *> values = getPointsTo(value);
-        errs() << "Pointers: ";
-        dump(pointers);
-        errs() << "Values: ";
-        dump(values);
+        // errs() << "Pointers: ";
+        // dump(pointers);
+        // errs() << "Values: ";
+        // dump(values);
 
         if (pointers.size() == 1)
         {
@@ -137,6 +137,7 @@ struct PointsToInfo
 
 inline raw_ostream &operator<<(raw_ostream &out, const PointsToInfo &info)
 {
+    errs() << "pts:\n";
     for (std::map<const Value *, std::set<Value *>>::const_iterator ii = info.pointsToSets.begin(),
                                                                     ie = info.pointsToSets.end();
          ii != ie; ++ii)
@@ -145,6 +146,22 @@ inline raw_ostream &operator<<(raw_ostream &out, const PointsToInfo &info)
         const std::set<Value *> &pointsToSet = ii->second;
         out << val->getName() << " -> {";
         for (std::set<Value *>::const_iterator si = pointsToSet.begin(), se = pointsToSet.end();
+             si != se; ++si)
+        {
+            const Value *v = *si;
+            out << v->getName() << ", ";
+        }
+        out << "}\n";
+    }
+    errs() << "pti:\n";
+    for (std::map<const Value *, std::set<Value *>>::const_iterator ii = info.pointerInclude.begin(),
+                                                                    ie = info.pointerInclude.end();
+         ii != ie; ++ii)
+    {
+        const Value *val = ii->first;
+        const std::set<Value *> &pointerInclude = ii->second;
+        out << val->getName() << " -> {";
+        for (std::set<Value *>::const_iterator si = pointerInclude.begin(), se = pointerInclude.end();
              si != se; ++si)
         {
             const Value *v = *si;
@@ -175,6 +192,16 @@ public:
             std::set<Value *> &destPointsToSet = dest->pointsToSets[val];
             destPointsToSet.insert(srcPointsToSet.begin(), srcPointsToSet.end());
         }
+
+        for (std::map<const Value *, std::set<Value *>>::const_iterator ii = src.pointerInclude.begin(),
+                                                                        ie = src.pointerInclude.end();
+             ii != ie; ++ii)
+        {
+            const Value *val = ii->first;
+            const std::set<Value *> &srcPointerInclude = ii->second;
+            std::set<Value *> &destPointerInclude = dest->pointerInclude[val];
+            destPointerInclude.insert(srcPointerInclude.begin(), srcPointerInclude.end());
+        }
         errs() << "Result: " << *dest << "\n";
     }
 
@@ -184,13 +211,10 @@ public:
             return;
 
         if (inst->getDebugLoc())
-        {
             errs() << "Location: " << inst->getDebugLoc().getLine() << "\n";
-        }
         else
-        {
             errs() << "Location: None\n";
-        }
+
         if (AllocaInst *allocaInst = dyn_cast<AllocaInst>(inst))
         {
             errs() << "AllocaInst: " << *allocaInst << "\n";
@@ -231,6 +255,10 @@ public:
         {
             errs() << "MemCpyInst: " << *memCpyInst << "\n";
         }
+        else if (ReturnInst *retInst = dyn_cast<ReturnInst>(inst))
+        {
+            errs() << "ReturnInst: " << *retInst << "\n";
+        }
         else if (CallInst *callInst = dyn_cast<CallInst>(inst))
         {
             errs() << "CallInst: " << *callInst << "\n";
@@ -249,20 +277,45 @@ public:
                     line2func[inst->getDebugLoc().getLine()].insert(f->getName());
             }
 
+            errs() << "CalledFunctions num: " << calledFunctions.size() << "\n";
+
+            PointsToInfo bbReturn;
+            bool hasReturn = false;
+            errs() << "dfval: " << *dfval << "\n";
             for (Function *f : calledFunctions)
             {
+                if (f->hasExactDefinition() == false)
+                    continue;
+                hasReturn = true;
                 DataflowResult<PointsToInfo>::Type fResult;
+                PointsToInfo newdfval = *dfval;
                 for (int i = 0; i < f->getFunctionType()->getNumParams(); ++i)
                 {
                     Value *arg = callInst->getArgOperand(i);
                     if (arg->getType()->isPointerTy())
                     {
                         Value *callArg = f->getArg(i);
-                        dfval->store(callArg, arg);
-                        fResult[&f->getEntryBlock()].first = *dfval;
+                        newdfval.store(callArg, arg);
                     }
                 }
+                fResult[&f->getEntryBlock()].first = newdfval;
+                errs() << "Calling Function: " << f->getName() << "\n";
+                errs() << "with incoming: " << newdfval << "\n";
                 compForwardDataflow(f, this, &fResult, PointsToInfo());
+                for (BasicBlock &bb : *f)
+                {
+                    if (isa<ReturnInst>(*bb.getTerminator()) ||
+                        (bb.getSingleSuccessor() == nullptr && bb.getUniqueSuccessor() == nullptr))
+                    {
+                        errs() << "BB terminator: " << *bb.getTerminator() << "\n";
+                        merge(&bbReturn, fResult[&bb].second);
+                    }
+                }
+            }
+            if (hasReturn)
+            {
+                errs() << "bbReturn: " << bbReturn << "\n";
+                *dfval = bbReturn;
             }
         }
         else
