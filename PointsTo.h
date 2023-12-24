@@ -137,7 +137,7 @@ struct PointsToInfo
 
 inline raw_ostream &operator<<(raw_ostream &out, const PointsToInfo &info)
 {
-    errs() << "pts:\n";
+    out << "pts:\n";
     for (std::map<const Value *, std::set<Value *>>::const_iterator ii = info.pointsToSets.begin(),
                                                                     ie = info.pointsToSets.end();
          ii != ie; ++ii)
@@ -153,7 +153,7 @@ inline raw_ostream &operator<<(raw_ostream &out, const PointsToInfo &info)
         }
         out << "}\n";
     }
-    errs() << "pti:\n";
+    out << "pti:\n";
     for (std::map<const Value *, std::set<Value *>>::const_iterator ii = info.pointerInclude.begin(),
                                                                     ie = info.pointerInclude.end();
          ii != ie; ++ii)
@@ -218,6 +218,19 @@ public:
         if (AllocaInst *allocaInst = dyn_cast<AllocaInst>(inst))
         {
             errs() << "AllocaInst: " << *allocaInst << "\n";
+            if (dfval->pointsToSets.find(allocaInst) == dfval->pointsToSets.end())
+            {
+                dfval->pointsToSets[allocaInst] = {UndefValue::get(Type::getVoidTy(*(new LLVMContext())))};
+            }
+        }
+        else if (BitCastInst *bitCastInit = dyn_cast<BitCastInst>(inst))
+        {
+            errs() << "BitCastInst: " << *bitCastInit << "\n";
+            // Value *src = bitCastInit->getOperand(0);
+            // Value *dest = bitCastInit;
+            // errs() << "Src: " << *src << "\n";
+            // errs() << "Dest: " << *dest << "\n";
+            // dfval->store(src, dest);
         }
         else if (StoreInst *storeInst = dyn_cast<StoreInst>(inst))
         {
@@ -246,10 +259,11 @@ public:
             errs() << "GetElementPtrInst: " << *getElementPtrInst << "\n";
             Value *pointer = getElementPtrInst->getPointerOperand();
             errs() << "Pointer: " << *pointer << "\n";
-            dfval->assign(pointer, getElementPtrInst);
+            dfval->load(pointer, getElementPtrInst);
         }
         else if (MemSetInst *memSetInst = dyn_cast<MemSetInst>(inst))
         {
+            errs() << "MemSetInst: " << *memSetInst << "\n";
         }
         else if (MemCpyInst *memCpyInst = dyn_cast<MemCpyInst>(inst))
         {
@@ -257,7 +271,7 @@ public:
         }
         else if (ReturnInst *retInst = dyn_cast<ReturnInst>(inst))
         {
-            errs() << "ReturnInst: " << *retInst << "\n";
+            // errs() << "ReturnInst: " << *retInst << "\n";
         }
         else if (CallInst *callInst = dyn_cast<CallInst>(inst))
         {
@@ -277,7 +291,7 @@ public:
                     line2func[inst->getDebugLoc().getLine()].insert(f->getName());
             }
 
-            errs() << "CalledFunctions num: " << calledFunctions.size() << "\n";
+            // errs() << "CalledFunctions num: " << calledFunctions.size() << "\n";
 
             PointsToInfo bbReturn;
             bool hasReturn = false;
@@ -295,13 +309,13 @@ public:
                     if (arg->getType()->isPointerTy())
                     {
                         Value *callArg = f->getArg(i);
-                        errs() << "CallArg: " << *callArg << "\n";
-                        errs() << "Arg: " << *arg << "\n";
+                        // errs() << "CallArg: " << *callArg << "\n";
+                        // errs() << "Arg: " << *arg << "\n";
                         newdfval.assign(arg, callArg);
                     }
                 }
                 fResult[&f->getEntryBlock()].first = newdfval;
-                errs() << "Calling Function: " << f->getName() << "\n";
+                // errs() << "Calling Function: " << f->getName() << "\n";
                 // errs() << "with incoming: " << newdfval << "\n";
                 compForwardDataflow(f, this, &fResult, PointsToInfo());
                 for (BasicBlock &bb : *f)
@@ -310,7 +324,7 @@ public:
                     {
                         if (Value *retValue = retInst->getReturnValue())
                         {
-                            errs() << "Return Value: " << *retValue << "\n";
+                            // errs() << "Return Value: " << *retValue << "\n";
                             fResult[&bb].second.assign(retValue, callInst);
                         }
                         merge(&bbReturn, fResult[&bb].second);
